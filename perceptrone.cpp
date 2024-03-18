@@ -22,33 +22,56 @@ void Neuron::Activation(int activationFunction)
     }
 }
 
-double Neuron::Sigmoid(double value)
+double Derivative(double value, int activationFunction)
+{
+    switch (activationFunction)
+    {
+    case SIGMOID:
+        return Sigmoid(value) * (1 - Sigmoid(value));
+    case RELU:
+        if (value > 0)
+            return 1;
+        return 0;
+    case LINEAR:
+        return 1;
+    case THRESHOLD:
+        return 1;
+    case LEAKY:
+        if (value > 0)
+            return 1;
+        return 0.01;
+    default:
+        return 1;
+    }
+}
+
+double Sigmoid(double value)
 {
     return 1 / (1 + exp(-value));
 }
 
-double Neuron::ReLU(double value)
+double ReLU(double value)
 {
     if (value < 0)
         return 0;
     return value;
 }
 
-double Neuron::Leaky_ReLU(double value)
+double Leaky_ReLU(double value)
 {
     if (value < 0)
-        return value*0.01;
+        return value * 0.01;
     return value;
 }
 
-double Neuron::Linear(double value)
+double Linear(double value)
 {
     return value;
 }
 
-double Neuron::Threshold(double value)
+double Threshold(double value)
 {
-    if (value <= 0)
+    if (value <= 0.5)
         return 0;
     return 1;
 }
@@ -112,7 +135,7 @@ void Perceptrone::fit(std::vector<double> enterNeurons)
     {
 
         for (Neuron *n : current->neurons)
-            n->value = 0;
+            n->value = n->bias;
 
         for (Connection *c : current->enterConnections)
             c->end->value += c->begin->value * c->weight;
@@ -124,72 +147,49 @@ void Perceptrone::fit(std::vector<double> enterNeurons)
     }
 }
 
-void Perceptrone::train(std::vector<double> rightAnswer, double alpha)
+double Perceptrone::backProp(Neuron *begin, Layer *exit, std::vector<double> &weightDeltas, double &biasDelta, const std::vector<double> &loss)
 {
-    Layer *current;
-    int layerNumber = 0;
-    std::vector<std::vector<double>> weightDeltas(layerCount - 1);
-    std::vector<double> delta(rightAnswer.size());
-
-    for (int i = 0; i < rightAnswer.size(); i++)
+    double beginLoss = 0;
+    for (int i = 0; i < exit->enterConnections.size(); i++)
     {
-        double pred = end->neurons[i]->value;
-        delta[i] = pred - rightAnswer[i];
-    }
-    current = end;
-
-    double nextDelta = 0;
-    for (int i = 0; i < rightAnswer.size(); i++)
-    {
-        for (Connection *c : current->enterConnections)
-            nextDelta += delta[i] * c->weight * (c->end == end->neurons[i]);
-    }
-
-    std::vector<double> layerDeltas = {nextDelta};
-    current = current->prev;
-    while (current->prev != nullptr)
-    {
-        double delta = 0;
-        for (Connection *c : current->enterConnections)
-            delta += layerDeltas[layerDeltas.size() - 1] * c->weight;
-
-        layerDeltas.push_back(delta);
-        current = current->prev;
-    }
-
-    current = current->next;
-    layerNumber = 0;
-    while (current->next != nullptr)
-    {
-        for (int i = 0; i < current->enterConnections.size(); i++)
-            weightDeltas[layerNumber].push_back(current->enterConnections[i]->begin->value * layerDeltas[layerDeltas.size() - 1 - layerNumber]);
-
-        layerNumber++;
-        current = current->next;
-    }
-
-    for (int i = 0; i < current->enterConnections.size(); i++)
-    {
-        for (int j = 0; j < current->neurons.size(); j++)
+        Connection *c = exit->enterConnections[i];
+        if (c->begin == begin)
         {
-            if (j == 0)
+            for (int j = 0; j < exit->neurons.size(); j++)
             {
-                weightDeltas[layerNumber].push_back(current->enterConnections[i]->begin->value * delta[j] * (current->enterConnections[i]->end == current->neurons[j]));
+                weightDeltas[i] += c->begin->value * Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
+                biasDelta += Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
+                beginLoss += c->weight * Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
             }
-            else
-                weightDeltas[layerNumber][i] += current->enterConnections[i]->begin->value * delta[j] * (current->enterConnections[i]->end == current->neurons[j]);
         }
     }
+    return beginLoss;
+}
 
-    current = begin->next;
-    layerNumber = 0;
-    while (current != nullptr)
+void Perceptrone::train(std::vector<double> rightAnswer, double alpha)
+{
+    std::vector<double> loss(end->neurons.size());
+    for(int i = 0; i < loss.size(); i++)
+        loss[i] = 2*(end->neurons[i]->value - rightAnswer[i]);
+
+    Layer* current = end;
+    while (current != begin)
     {
-        for (int i = 0; i < current->enterConnections.size(); i++)
-            current->enterConnections[i]->weight -= weightDeltas[layerNumber][i] * alpha;
+        std::vector<double> weightDeltas(current->enterConnections.size(), 0);
+        std::vector<double> newLoss(current->prev->neurons.size());
 
-        layerNumber++;
-        current = current->next;
+        for (int i = 0; i < current->prev->neurons.size(); i++)
+        {
+            double biasDelta = 0;
+            newLoss[i] = backProp(current->prev->neurons[i], current, weightDeltas, biasDelta, loss);
+            current->prev->neurons[i]->bias -= biasDelta * alpha;
+        }
+        
+        for (int i = 0; i < current->enterConnections.size(); i++)
+            current->enterConnections[i]->weight -= weightDeltas[i] * alpha;
+        
+        loss = newLoss;
+        current = current->prev;
     }
 }
 
@@ -289,38 +289,65 @@ Perceptrone::Perceptrone(std::string filepath)
     in.close();
 }
 
-void Perceptrone::train(std::vector<std::vector<double>> dataset, std::vector<std::vector<double>> rightAnswers, double alpha)
+void Perceptrone::train(std::vector<std::vector<double>> features, std::vector<std::vector<double>> rightAnswers, double alpha)
 {
-    for (int i = 0; i < dataset.size(); i++)
+    for (int i = 0; i < features.size(); i++)
     {
-        fit(dataset[i]);
+        fit(features[i]);
         train(rightAnswers[i], alpha);
     }
 }
 
-double Perceptrone::Error(std::vector<std::vector<double>> dataset, std::vector<std::vector<double>> rightAnswers)
+double Perceptrone::Error(std::vector<std::vector<double>> features, std::vector<std::vector<double>> rightAnswers)
 {
     double error = 0;
-    for (int i = 0; i < dataset.size(); i++)
+    for (int i = 0; i < features.size(); i++)
     {
-        fit(dataset[i]);
+        fit(features[i]);
         for (int j = 0; j < rightAnswers[i].size(); j++)
             error += (end->neurons[j]->value - rightAnswers[i][j]) * (end->neurons[j]->value - rightAnswers[i][j]);
     }
     return error;
 }
 
-void MixDataset (std::vector<std::vector<double>>& dataset, std::vector<std::vector<double>>& features)
+void MixDataset(std::vector<std::vector<double>> &features, std::vector<std::vector<double>> &targets)
 {
-    for (int i = 0; i < dataset.size(); i++)
+    for (int i = 0; i < targets.size(); i++)
     {
-        int pivot = rand() % dataset.size();
-        std::swap(dataset[i], dataset[pivot]);
+        int pivot = rand() % features.size();
         std::swap(features[i], features[pivot]);
+        std::swap(targets[i], targets[pivot]);
     }
 }
 
-void ReadCSV(std::string filename, std::vector<std::vector<double>>& dataset, std::vector<std::vector<double>> features, std::vector<int> featuresColumns)
+void ReadCSV(std::string filepath, std::vector<std::vector<double>> &features, std::vector<std::vector<double>> &targets, std::vector<int> targetsColumns, bool oneHotEncode)
 {
-    
+    /*std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::vector<double> rowFeatures;
+        double target;
+        int columnNumber = 0;
+
+        std::string cell;
+        while (std::getline(ss, cell, ',')) {
+            if (columnNumber == targetColumn) {
+                target = std::stod(cell);
+            } else if (std::find(featureColumns.begin(), featureColumns.end(), columnNumber) != featureColumns.end()) {
+                rowFeatures.push_back(std::stod(cell));
+            }
+            columnNumber++;
+        }
+
+        features.push_back(rowFeatures);
+        targets.push_back(target);
+    }
+
+    file.close();*/
 }

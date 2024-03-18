@@ -1,2 +1,4 @@
-all:
-	g++ -I src/include -L src/lib -o main main.cpp -lmingw32 -lSDL2main -lSDL2
+test: test.cpp perceptrone.o
+	g++ -o test test.cpp perceptrone.o
+perceptrone.o: perceptrone.cpp
+	g++ -c -o perceptrone.o perceptrone.cpp

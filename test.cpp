@@ -1,4 +1,10 @@
 #include "perceptrone.h"
+void PrintVector(std::vector<double> vec)
+{
+    for (double i : vec)
+        std::cout << i << ' ';
+    std::cout << '\n';
+}
 
 void test_AND()
 {
@@ -56,7 +62,7 @@ void test_OR()
     std::vector<double> ans4 = {1};
 
     std::vector<std::vector<double>> rightAnswers = {ans1, ans2, ans3, ans4};
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 1000; i++)
     {
         p->train(dataset, rightAnswers, 0.01);
     }
@@ -71,18 +77,64 @@ void test_OR()
     delete p;
 }
 
-void test_multiexit()
+void test_XOR()
 {
-    std::vector<int> neuronCounts = {2, 3};
-    Perceptrone *p = new Perceptrone(neuronCounts, true, RELU);
-
-    std::vector<std::vector<double>> dataset;
+    std::vector<int> neuronCounts = {2, 16, 1};
+    Perceptrone *p = new Perceptrone(neuronCounts, true, SIGMOID);
+    std::vector<std::vector<double>> features;
     for (int i = 0; i <= 1; i++)
     {
         for (int j = 0; j <= 1; j++)
         {
             std::vector<double> data = {(double)i, (double)j};
-            dataset.push_back(data);
+            features.push_back(data);
+        }
+    }
+    std::vector<double> ans1 = {0};
+    std::vector<double> ans2 = {1};
+    std::vector<double> ans3 = {1};
+    std::vector<double> ans4 = {0};
+    
+    std::vector<std::vector<double>> targets = {ans1, ans2, ans3, ans4};
+    for (int i = 0; i < 10000; i++)
+    {
+        MixDataset(features, targets);
+        for (int i = 0; i < features.size(); i++)
+        {
+            int count = rand() % 10 + 1;
+            for (int _ = 0; _ <= count; _++)
+            {
+                p->fit(features[i]);
+                p->train(targets[i], 0.5);
+            }
+        }
+        //p->train(features, targets, 0.05);
+        std::cout << i << ": " << p->Error(features, targets) << '\n';
+    }
+    for (std::vector<double> data : features)
+    {
+        p->fit(data);
+        PrintVector(data);
+        p->PrintExit();
+    }
+
+    p->PrintWeights();
+
+    delete p;
+}
+
+void test_multiexit()
+{
+    std::vector<int> neuronCounts = {2, 3};
+    Perceptrone *p = new Perceptrone(neuronCounts, true, RELU);
+
+    std::vector<std::vector<double>> features;
+    for (int i = 0; i <= 1; i++)
+    {
+        for (int j = 0; j <= 1; j++)
+        {
+            std::vector<double> data = {(double)i, (double)j};
+            features.push_back(data);
         }
     }
     std::vector<double> ans1 = {1, 1, 1};
@@ -93,10 +145,10 @@ void test_multiexit()
     std::vector<std::vector<double>> rightAnswers = {ans1, ans2, ans3, ans4};
     for (int i = 0; i < 10000; i++)
     {
-        p->train(dataset, rightAnswers, 0.01);
+        p->train(features, rightAnswers, 0.01);
     }
 
-    for (std::vector<double> data : dataset)
+    for (std::vector<double> data : features)
     {
         p->fit(data);
         p->PrintExit();
@@ -193,11 +245,13 @@ void testIris()
     p->Save("Iris_nn.txt");
     delete p;
 }
+
 int main()
 {
-    testIris();
+    test_XOR();
+    /*testIris();
     Perceptrone* p = new Perceptrone("Iris_nn.txt");
     std::vector<double> test = {6.3, 3.3, 6.0, 2.5};
     p->fit(test);
-    p->PrintExit();
+    p->PrintExit();*/
 }
