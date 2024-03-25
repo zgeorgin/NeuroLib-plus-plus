@@ -1,24 +1,23 @@
-#include "perceptrone.h"
+#include "../headers/perceptrone.h"
 
-void Neuron::Activation(int activationFunction)
+double Activation(double value, int activationFunction)
 {
     switch (activationFunction)
     {
     case SIGMOID:
-        value = Sigmoid(value);
-        break;
+        return Sigmoid(value);
     case RELU:
-        value = ReLU(value);
-        break;
+        return ReLU(value);
     case LINEAR:
-        value = Linear(value);
-        break;
+        return Linear(value);
     case THRESHOLD:
-        value = Threshold(value);
-        break;
+        return Threshold(value);
     case LEAKY:
-        value = Leaky_ReLU(value);
-        break;
+        return Leaky_ReLU(value);
+    case TANH:
+        return Tanh(value);
+    default:
+        return value;
     }
 }
 
@@ -40,6 +39,8 @@ double Derivative(double value, int activationFunction)
         if (value > 0)
             return 1;
         return 0.01;
+    case TANH:
+        return 1 - Tanh(value) * Tanh(value);
     default:
         return 1;
     }
@@ -76,9 +77,10 @@ double Threshold(double value)
     return 1;
 }
 
+double Tanh(double value) { return tanh(value); }
+
 Layer::Layer(int neuronCount)
 {
-    srand(time(0));
     for (int i = 0; i < neuronCount; i++)
     {
         Neuron *n = new Neuron();
@@ -90,11 +92,14 @@ void Layer::connect(Layer *another)
 {
     another->prev = this;
     next = another;
+    std::mt19937 gen(time(0));
+    std::uniform_real_distribution<> distr(-sqrt(3), sqrt(3));
     for (Neuron *n1 : another->neurons)
     {
         for (Neuron *n2 : neurons)
         {
-            double weight = (double)rand() / (double)RAND_MAX;
+
+            double weight = (double)rand() / ((double)RAND_MAX);//distr(gen); 
             Connection *c = new Connection(weight, n2, n1);
             another->enterConnections.push_back(c);
         }
@@ -122,26 +127,22 @@ void Perceptrone::fit(std::vector<double> enterNeurons)
 {
     Layer *current = begin;
     for (int i = 0; i < enterNeurons.size(); i++)
-    {
-        current->neurons[i]->value = enterNeurons[i];
-        current->neurons[i]->Activation(activationFunction);
-    }
+        current->neurons[i]->output = Activation(enterNeurons[i], activationFunction);
 
     if (displacement)
-        current->neurons[current->neurons.size() - 1]->value = 1;
+        current->neurons[current->neurons.size() - 1]->output = Activation(1, activationFunction);
 
     current = current->next;
     while (current != nullptr)
     {
-
         for (Neuron *n : current->neurons)
-            n->value = n->bias;
+            n->value = 0;
 
         for (Connection *c : current->enterConnections)
-            c->end->value += c->begin->value * c->weight;
+            c->end->value += c->begin->output * c->weight;
 
         for (Neuron *n : current->neurons)
-            n->Activation(activationFunction);
+            n->output = Activation(n->value + n->bias, activationFunction);
 
         current = current->next;
     }
@@ -157,9 +158,9 @@ double Perceptrone::backProp(Neuron *begin, Layer *exit, std::vector<double> &we
         {
             for (int j = 0; j < exit->neurons.size(); j++)
             {
-                weightDeltas[i] += c->begin->value * Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
-                biasDelta += Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
-                beginLoss += c->weight * Derivative(c->weight * c->begin->value, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
+                weightDeltas[i] += c->begin->output * Derivative(c->end->output, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
+                biasDelta += Derivative(c->end->output, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
+                beginLoss += c->weight * Derivative(c->end->output, activationFunction) * loss[j] * (c->end == exit->neurons[j]);
             }
         }
     }
@@ -169,10 +170,10 @@ double Perceptrone::backProp(Neuron *begin, Layer *exit, std::vector<double> &we
 void Perceptrone::train(std::vector<double> rightAnswer, double alpha)
 {
     std::vector<double> loss(end->neurons.size());
-    for(int i = 0; i < loss.size(); i++)
-        loss[i] = 2*(end->neurons[i]->value - rightAnswer[i]);
+    for (int i = 0; i < loss.size(); i++)
+        loss[i] = 2 * (end->neurons[i]->output - rightAnswer[i]);
 
-    Layer* current = end;
+    Layer *current = end;
     while (current != begin)
     {
         std::vector<double> weightDeltas(current->enterConnections.size(), 0);
@@ -184,10 +185,10 @@ void Perceptrone::train(std::vector<double> rightAnswer, double alpha)
             newLoss[i] = backProp(current->prev->neurons[i], current, weightDeltas, biasDelta, loss);
             current->prev->neurons[i]->bias -= biasDelta * alpha;
         }
-        
+
         for (int i = 0; i < current->enterConnections.size(); i++)
             current->enterConnections[i]->weight -= weightDeltas[i] * alpha;
-        
+
         loss = newLoss;
         current = current->prev;
     }
@@ -210,7 +211,7 @@ void Perceptrone::PrintWeights()
 void Perceptrone::PrintExit()
 {
     for (Neuron *n : end->neurons)
-        std::cout << n->value << ' ';
+        std::cout << n->output << ' ';
 
     std::cout << '\n';
 }
@@ -305,9 +306,9 @@ double Perceptrone::Error(std::vector<std::vector<double>> features, std::vector
     {
         fit(features[i]);
         for (int j = 0; j < rightAnswers[i].size(); j++)
-            error += (end->neurons[j]->value - rightAnswers[i][j]) * (end->neurons[j]->value - rightAnswers[i][j]);
+            error += (end->neurons[j]->output - rightAnswers[i][j]) * (end->neurons[j]->output - rightAnswers[i][j]);
     }
-    return error;
+    return error/features.size();
 }
 
 void MixDataset(std::vector<std::vector<double>> &features, std::vector<std::vector<double>> &targets)

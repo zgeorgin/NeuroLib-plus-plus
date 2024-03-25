@@ -1,4 +1,4 @@
-#include "perceptrone.h"
+#include "headers/perceptrone.h"
 void PrintVector(std::vector<double> vec)
 {
     for (double i : vec)
@@ -79,8 +79,8 @@ void test_OR()
 
 void test_XOR()
 {
-    std::vector<int> neuronCounts = {2, 16, 1};
-    Perceptrone *p = new Perceptrone(neuronCounts, true, SIGMOID);
+    std::vector<int> neuronCounts = {2, 4, 1};
+    Perceptrone *p = new Perceptrone(neuronCounts, true, TANH);
     std::vector<std::vector<double>> features;
     for (int i = 0; i <= 1; i++)
     {
@@ -99,16 +99,19 @@ void test_XOR()
     for (int i = 0; i < 10000; i++)
     {
         MixDataset(features, targets);
-        for (int i = 0; i < features.size(); i++)
+        /*for (int i = 0; i < features.size(); i++)
         {
             int count = rand() % 10 + 1;
             for (int _ = 0; _ <= count; _++)
             {
                 p->fit(features[i]);
-                p->train(targets[i], 0.5);
+                p->train(targets[i], 0.001);
             }
-        }
-        //p->train(features, targets, 0.05);
+            //p->train(features, targets, 0.1);
+            //std::cout << i << ": " << p->Error(features, targets) << '\n';
+        }*/
+        p->train(features, targets, 0.01);
+
         std::cout << i << ": " << p->Error(features, targets) << '\n';
     }
     for (std::vector<double> data : features)
@@ -230,12 +233,14 @@ void testIris()
     validation_data.close();
     
     std::cout << train_dataset.size() << ' ' << train_features.size() << '\n';
-    std::vector<int> neuronCounts = {4, 5, 3};
-    Perceptrone* p = new Perceptrone(neuronCounts, true, SIGMOID);
-    for (int i = 0; i <= 3000; i++)
+    std::vector<int> neuronCounts = {4, 7, 3};
+    Perceptrone* p = new Perceptrone(neuronCounts, true, LEAKY);
+    for (int i = 0; i <= 10000; i++)
     {
         MixDataset(train_dataset, train_features);
         p->train(train_dataset, train_features, 0.001);
+        if (i%100 == 0)
+            std::cout << i << ": " << p->Error(train_dataset, train_features) << '\n'; 
     }
     
     std::cout << "Error: " << p->Error(validation_dataset, validation_features) << '\n'; 
@@ -248,10 +253,10 @@ void testIris()
 
 int main()
 {
-    test_XOR();
-    /*testIris();
+    //testIris();
+    testIris();
     Perceptrone* p = new Perceptrone("Iris_nn.txt");
     std::vector<double> test = {6.3, 3.3, 6.0, 2.5};
     p->fit(test);
-    p->PrintExit();*/
+    p->PrintExit();
 }

@@ -11,12 +11,14 @@
 #define LINEAR 3
 #define THRESHOLD 4
 #define LEAKY 5
+#define TANH 6
 
 double Sigmoid(double value);
 double ReLU(double value);
 double Linear(double value);
 double Threshold(double value);
 double Leaky_ReLU(double value);
+double Tanh(double value);
 void MixDataset(std::vector<std::vector<double>> &features, std::vector<std::vector<double>> &targets);
 
 void ReadCSV(std::string filepath, std::vector<std::vector<double>> &features, std::vector<std::vector<double>> &targets, std::vector<int> targetsColumns, bool oneHotEncode = true);
@@ -26,8 +28,8 @@ class Neuron
 public:
     double value;
     double bias;
+    double output;
     Neuron() { value = 0; bias = (double)rand() / (double)RAND_MAX;};
-    void Activation(int activationFunction);
 };
 
 class Connection
